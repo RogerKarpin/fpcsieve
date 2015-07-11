@@ -36,7 +36,7 @@ unsigned int *sieve_composites = NULL; /* Master list of composites */
 static unsigned int lim_sieve_composites = 0; /* List contains all composites <= lim */
 
 static unsigned char *plus_list = NULL, *minus_list = NULL;
-static unsigned int nmin = 0, nmax = 0;
+static unsigned int nmin = 0, nmax = 0, multiplier = 1;
 static const char *input_filename = NULL, *output_filename = NULL;
 static const char *factors_filename = NULL;
 static unsigned int remaining_terms = 0, factor_count = 0;
@@ -125,19 +125,49 @@ static void report_factor(unsigned int n, int c, uint64_t p)
     if ((file = fopen(factors_filename,"a")) != NULL)
     {
       if (mode == MODE_FACTORIAL)
-        fprintf(file,"%"PRIu64" | %u!%+d\n",p,n,c);
+	  {
+		if (multiplier > 1)
+		  fprintf(file,"%"PRIu64" | %u*%u!%+d\n",p,multiplier,n,c);
+		else
+		  fprintf(file,"%"PRIu64" | %u!%+d\n",p,n,c);
+	  }
       else if (mode == MODE_PRIMORIAL)
-        fprintf(file,"%"PRIu64" | %u#%+d\n",p,sieve_primes[n],c);
+	  {
+        if (multiplier > 1)
+		  fprintf(file,"%"PRIu64" | %u*%u#%+d\n",p,multiplier,sieve_primes[n],c);
+		else
+		  fprintf(file,"%"PRIu64" | %u#%+d\n",p,sieve_primes[n],c);
+	  }
 	  else /* mode == MODE_COMPOSITORIAL */
-		fprintf(file,"%"PRIu64" | %u!/%u#%+d\n",p,sieve_composites[n],sieve_composites[n],c);
+	  {
+		if (multiplier > 1)
+		  fprintf(file,"%"PRIu64" | %u*%u!/%u#%+d\n",p,multiplier,sieve_composites[n],sieve_composites[n],c);
+		else
+		  fprintf(file,"%"PRIu64" | %u!/%u#%+d\n",p,sieve_composites[n],sieve_composites[n],c);
+	  }
       fclose(file);
     }
     if (mode == MODE_FACTORIAL)
-      printf("%"PRIu64" | %u!%+d\n",p,n,c);
+	{
+      if (multiplier > 1)
+		  printf("%"PRIu64" | %u*%u!%+d\n",p,multiplier,n,c);
+	  else
+		  printf("%"PRIu64" | %u!%+d\n",p,n,c);
+	}
     else if (mode == MODE_PRIMORIAL)
-      printf("%"PRIu64" | %u#%+d\n",p,sieve_primes[n],c);
+	{
+	  if (multiplier > 1)
+		  printf("%"PRIu64" | %u*%u#%+d\n",p,multiplier,sieve_primes[n],c);
+	  else
+		  printf("%"PRIu64" | %u#%+d\n",p,sieve_primes[n],c);
+	}
 	else /* mode == MODE_COMPOSITORIAL */
-      printf("%"PRIu64" | %u!/%u#%+d\n",p,sieve_composites[n],sieve_composites[n],c);
+	{
+	  if (multiplier > 1)
+		  printf("%"PRIu64" | %u*%u!/%u#%+d\n",p,multiplier,sieve_composites[n],sieve_composites[n],c);
+	  else
+		  printf("%"PRIu64" | %u!/%u#%+d\n",p,sieve_composites[n],sieve_composites[n],c);
+	}
   }
 
 #ifdef _WIN32
@@ -206,6 +236,10 @@ int app_parse_option(int opt, char *arg, const char *source)
       factors_filename = (source == NULL)? arg : xstrdup(arg);
       break;
 
+	case 'm':
+      status = parse_uint(&multiplier,arg,1,(1U<<31)-1);
+      break;
+
     case 'w':
       mode = MODE_COMPOSITORIAL;
       break;
@@ -240,6 +274,7 @@ void app_help(void)
   printf("-o --output=FILE   Write final sieve to FILE\n");
   printf("-f --factors=FILE  Write factors to FILE (default `%s')\n",
          FACTORS_FILENAME_DEFAULT);
+  printf("-m --multiplier=M  Sieve M*n!/n# with 1 <= M < 2^31 (default=1)\n");
   printf("-w --compositorial Compositorial mode\n");
   printf("-x --factorial     Factorial mode\n");
   printf("-y --primorial     Primorial mode\n");
@@ -288,6 +323,11 @@ void app_init(void)
       fprintf(stderr,"nmax must not be less than nmin\n");
       exit(EXIT_FAILURE);
     }
+	if (multiplier < 1)
+	{
+	  fprintf(stderr,"multiplier must not be less than 1\n");
+      exit(EXIT_FAILURE);
+	}
     if (mode == MODE_NONE)
     {
       fprintf(stderr,"No mode selected, using factorial\n");
@@ -296,10 +336,10 @@ void app_init(void)
   }
   else
   {
-    FILE *file;
-    unsigned int n;
-    int c;
-    char ch1, ch2;
+	FILE *file;
+	unsigned int n;
+	int c;
+	char ch1, ch2;
 
     if ((file = fopen(input_filename,"r")) == NULL)
     {
@@ -307,12 +347,18 @@ void app_init(void)
       exit(EXIT_FAILURE);
     }
 
-	if (fscanf(file,"ABC $a%c",&ch1) != 1 || (ch1 != '!' && ch1 != '#'))
+	if (fscanf(file,"ABC %d*$a%c",&c,&ch1) == 2 && (c > 0) && (ch1 == '!' || ch1 == '#'))
+		multiplier = c;
+	else
 	{
-	  fprintf(stderr,"Invalid header in input file `%s'\n",input_filename);
-      exit(EXIT_FAILURE);
+	  rewind(file);
+	  if (fscanf(file,"ABC $a%c",&ch1) != 1 || (ch1 != '!' && ch1 != '#'))
+	  {
+	    fprintf(stderr,"Invalid header in input file `%s'\n",input_filename);
+        exit(EXIT_FAILURE);
+	  }
 	}
-	else if (ch1 == '!')
+	if (ch1 == '!')
 	{
 	  if (fscanf(file,"%c",&ch2) != 1 || (ch2 != '+' && ch2 != '/'))
 	  {
@@ -442,10 +488,10 @@ void app_init(void)
   }
   else
   {
-    FILE *file;
+	FILE *file;
     unsigned int n, bit, count;
-    int c;
-    char ch1, ch2;
+	int c;
+	char ch1, ch2;
 
     if ((file = fopen(input_filename,"r")) == NULL)
     {
@@ -453,12 +499,16 @@ void app_init(void)
       exit(EXIT_FAILURE);
     }
 
-	if (fscanf(file,"ABC $a%c",&ch1) != 1 || (ch1 != '!' && ch1 != '#'))
+	if (fscanf(file,"ABC %d*$a%c",&c,&ch1) != 2 || (c < 1) || (ch1 != '!' && ch1 != '#'))
 	{
-	  fprintf(stderr,"Invalid header in input file `%s'\n",input_filename);
-      exit(EXIT_FAILURE);
+	  rewind(file);
+	  if (fscanf(file,"ABC $a%c",&ch1) != 1 || (ch1 != '!' && ch1 != '#'))
+	  {
+	    fprintf(stderr,"Invalid header in input file `%s'\n",input_filename);
+        exit(EXIT_FAILURE);
+	  }
 	}
-	else if (ch1 == '!')
+	if (ch1 == '!')
 	{
 	  if (fscanf(file,"%c",&ch2) != 1 || (ch2 != '+' && ch2 != '/'))
 	  {
@@ -828,7 +878,7 @@ void app_thread_fun(int th, uint64_t *P)
     */
     n = 2;
     for (j = 0; j < APP_BUFLEN; j++)
-      REM[j] = 2;
+      REM[j] = multiplier*2;
 
 #if defined(__x86_64__) && APP_BUFLEN==4
     if (factorial4_x86_64(n,nmax,REM,P))
@@ -891,7 +941,7 @@ void app_thread_fun(int th, uint64_t *P)
       {
 		//printf("P[%u] = %u\n",j,P[j]);
         INV[j] = 1.0/P[j];
-        REM[j] = 2;
+        REM[j] = multiplier*2;
       }
 
       for (i = 0; i < prime_count; i++)
@@ -949,7 +999,7 @@ void app_thread_fun(int th, uint64_t *P)
       {
 		//printf("P[%u] = %u\n",j,P[j]);
         INV[j] = 1.0/P[j];
-        REM[j] = 1;
+        REM[j] = multiplier*1;
       }
 
       for (i = 0; i < composite_count; i++)
@@ -1070,7 +1120,10 @@ void app_write_checkpoint(FILE *fout)
 
     if (mode == MODE_FACTORIAL)
     {
-      fprintf(file,"ABC $a!+$b\n");
+      if (multiplier > 1)
+		fprintf(file,"ABC %u*$a!+$b\n",multiplier);
+	  else
+		fprintf(file,"ABC $a!+$b\n");
       bits = nmax-nmin+1;
       for (i = 0, count = 0; i < bits; i++)
       {
@@ -1082,7 +1135,10 @@ void app_write_checkpoint(FILE *fout)
     }
     else if (mode == MODE_PRIMORIAL)
     {
-      fprintf(file,"ABC $a#+$b\n");
+      if (multiplier > 1)
+		fprintf(file,"ABC %u*$a#+$b\n",multiplier);
+	  else
+		fprintf(file,"ABC $a#+$b\n");
       bits = prime_count - prime_base;
       for (i = 0, count = 0; i < bits; i++)
       {
@@ -1094,7 +1150,10 @@ void app_write_checkpoint(FILE *fout)
     }
 	else /* mode == MODE_COMPOSITORIAL */
     {
-      fprintf(file,"ABC $a!/$a#+$b\n");
+      if (multiplier > 1)
+		fprintf(file,"ABC %u*$a!/$a#+$b\n",multiplier);
+	  else
+		fprintf(file,"ABC $a!/$a#+$b\n");
       bits = composite_count - composite_base;
       for (i = 0, count = 0; i < bits; i++)
       {

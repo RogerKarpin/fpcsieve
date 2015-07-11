@@ -17,7 +17,7 @@
 #include <stdint.h>
 
 
-#define APP_VERSION "0.1.1"
+#define APP_VERSION "0.2.0"
 
 
 /* Number of candidates to buffer between calls to app_thread_fun()
@@ -45,13 +45,14 @@
 #define SSE2_LONG_OPTS
 #endif
 
-#define APP_SHORT_OPTS "n:N:i:o:f:wxy"
+#define APP_SHORT_OPTS "n:N:i:o:f:m:wxy"
 #define APP_LONG_OPTS \
   {"nmin",          required_argument, 0, 'n'}, \
   {"nmax",          required_argument, 0, 'N'}, \
   {"input",         required_argument, 0, 'i'}, \
   {"output",        required_argument, 0, 'o'}, \
   {"factors",       required_argument, 0, 'f'}, \
+  {"multiplier",    required_argument, 0, 'm'}, \
   {"compositorial", no_argument,       0, 'w'}, \
   {"factorial",     no_argument,       0, 'x'}, \
   {"primorial",     no_argument,       0, 'y'}, \
